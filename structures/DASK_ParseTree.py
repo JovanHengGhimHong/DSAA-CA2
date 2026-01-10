@@ -23,8 +23,8 @@ class DASK_ParseTree:
           tokens.append(i)
 
       # All same logic as above
-      elif i.isdigit():
-        if len(tokens) > 0 and tokens[-1].isdigit():
+      elif i.isdigit() or i == '.':
+        if len(tokens) > 0 and (tokens[-1].isdigit() or '.' in tokens[-1]):
           tokens[-1] = tokens[-1] + i
         else:
           tokens.append(i)
@@ -73,6 +73,14 @@ class DASK_ParseTree:
       rightTree = tree.getRightTree()
       op = tree.getKey()
 
+      # for single '?' nodes which handles single value expressions (no operations)
+      if op == '?':
+          if leftTree is not None:
+              return self.evaluate(leftTree, hash_table)
+          if rightTree is not None:
+              return self.evaluate(rightTree, hash_table)
+
+      # main evaluation
       if leftTree != None and rightTree != None:
         left_val = self.evaluate(leftTree, hash_table)
         if left_val is None:
@@ -97,6 +105,8 @@ class DASK_ParseTree:
         if op == '//':
             return self.summative(left_val) / self.summative(right_val)
 
+
+
         return None  # unknown operator
       
       # there is left right expression that evals to None and current is op
@@ -107,7 +117,7 @@ class DASK_ParseTree:
         # query variable value from table
         return hash_table[op].value if hash_table[op] != None else None
 
-      return int(op)
+      return float(op)
 
 if __name__ == '__main__':
   exp = "( ((10 ++ 5 ) // 3 )) * (Beta - Alpha)"

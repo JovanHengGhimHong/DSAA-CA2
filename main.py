@@ -1,5 +1,6 @@
 import networkx as nx
 from structures.DASK_ParseTree import DASK_ParseTree
+from structures.SortedMap import SortedMap
 from structures.HashTable import HashTable, Dask
 
 start_msg = '''
@@ -17,6 +18,8 @@ menu_msg = '''
     1. Add/Modify DASK Expressions
     2. Display current DASK expressions
     3. Evaluate a single DASK variable
+    4. Read DASK expressions from file
+    5. Sort DASK expressions
     6. Exit
 '''
 print(start_msg)
@@ -27,16 +30,9 @@ parser = DASK_ParseTree()
 hash_table = HashTable(100)
 topological_graph = nx.DiGraph()
 
-# Main Loop
-choice = input("Enter choice: ")
-while choice != '6':
-  # Expression Storing/Modify
-  if choice == '1':
-    print("Enter the DASK expression you want to add/modify:")
-    print("For example: a=(1+2)\n")
-    DASK = input()
-    key , exp = DASK.strip().split('=', 1)
+def add_dask_expresssion(key, exp):
     tokens = parser.tokenizer(exp)
+    print(key , tokens)
 
     # Parse tree build and evaluate
     hash_table[key] = Dask(expression=tokens, value=None)
@@ -57,16 +53,19 @@ while choice != '6':
 
       # update
       hash_table[key] = dask_obj
+    return
 
-  # evaluuation
-  elif choice == '2':
+def show_dask_expressions(hash_table, topological_graph):
+    # since we want to output sorted alphabetically we can use a sorted map
+    sorted_map = SortedMap()
+
     print('CURRENT EXPRESSION:')
     print('***************************************')
 
     # print the independent ones first
     for var, dask_obj in hash_table.items():
       if dask_obj.independent:
-        print(f'{var}={dask_obj}')
+        sorted_map[var] = dask_obj
 
     # iteratively calcuate
     sorted_graph = list(nx.topological_sort(topological_graph))
@@ -88,7 +87,30 @@ while choice != '6':
       dask_obj.value = value
       hash_table[var] = dask_obj
 
+      # add to sorted map
+      sorted_map[var] = dask_obj
+
+    # output all
+    for var, dask_obj in sorted_map.items():
       print(f'{var}={dask_obj}')
+    return
+
+#################################
+# Main Loop
+#################################
+choice = input("Enter choice: ")
+while choice != '6':
+  # Expression Storing/Modify
+  if choice == '1':
+    print("Enter the DASK expression you want to add/modify:")
+    print("For example: a=(1+2)\n")
+    DASK = input()
+    key , exp = DASK.strip().split('=', 1)
+    add_dask_expresssion(key, exp)
+
+  # evaluuation
+  elif choice == '2':
+    show_dask_expressions(hash_table, topological_graph)
 
   # evaluate single expression from hash
   elif choice == '3':
@@ -105,7 +127,25 @@ while choice != '6':
       print('\nExpression Tree (Inorder):')
       tree.print_tree_inorder()
       print(f'Value of variable "{var}" is {value}')
+
+  # read from file and add dask to table
+  elif choice == '4':
+    filename = input("Please enter input file: ")
+    with open(filename, 'r') as f:
+      lines = f.readlines()
+
+      for line in lines:
+        key , exp = line.strip().split('=', 1)
+        add_dask_expresssion(key, exp)
+
+    f.close()
     
+    # print current expressions
+    show_dask_expressions(hash_table, topological_graph)
+
+  # sort expressions based on result values
+  elif choice == '5':
+    pass
 
 
   # re-input

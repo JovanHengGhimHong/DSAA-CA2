@@ -1,4 +1,5 @@
 from structures.BinaryTree import BinaryTree
+from structures.Stack import Stack
 
 class DASK_ParseTree:
   def __init__(self):
@@ -41,8 +42,8 @@ class DASK_ParseTree:
 
   def buildParseTree(self, tokens):
       tree = BinaryTree('?')
-      stack = []
-      stack.append(tree)
+      stack = Stack()
+      stack.push(tree)
 
       currentTree = tree
 
@@ -59,10 +60,10 @@ class DASK_ParseTree:
               stack.append(currentTree)
               currentTree = right_branch
           elif t == ')':
-              currentTree = stack.pop(-1)
+              currentTree = stack.pop()
           else:
               currentTree.setKey(t)
-              currentTree = stack.pop(-1)
+              currentTree = stack.pop()
 
       return tree
 

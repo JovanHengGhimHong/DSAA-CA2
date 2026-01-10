@@ -1,8 +1,10 @@
 class Dask:
-  def __init__(self , var , exp, value=None):
-    self.var = var
-    self.exp = exp
+  def __init__(self, expression, value, independent=False):
+    self.expression = expression
     self.value = value
+    self.independent = independent
+  def __repr__(self):
+    return f'{"".join(self.expression)}=> {self.value}'
   
 class HashTable:
     def __init__(self , size):
@@ -14,9 +16,12 @@ class HashTable:
     def hashKey(self , key):
         return (key * 2654435761) & 0xFFFFFFFF % self.size
 
+    def items(self):
+      return ((k, v) for k, v in zip(self.keys, self.buckets) if k is not None)
+
 
     def __setitem__(self , key , value):
-        index = self.hashKey(key)
+        index = self.hashKey(ord(key))
         start_index = index
 
         while True:
@@ -44,7 +49,7 @@ class HashTable:
 
     def __getitem__(self, key):
         # same idea of hashing and going over entire keys list
-        index = self.hashKey(key)
+        index = self.hashKey(ord(key))
 
         start_index = index
 

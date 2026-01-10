@@ -2,7 +2,7 @@ from structures.BinaryTree import BinaryTree
 from structures.HashTable import HashTable
 
 class DASK_ParseTree:
-  def __init__(self, size = 100):
+  def __init__(self):
     self.operations = ['+' , '-' , '/' , '*' , '**' , '++' , '//']
 
   def summative(self , a ):
@@ -53,7 +53,7 @@ class DASK_ParseTree:
               currentTree.insertLeft(next_branch)
               stack.append(currentTree)
               currentTree = next_branch
-          elif t in ['+' , '-' , '/' , '*', '**' , '++', '//']:
+          elif t in self.operations:
               currentTree.setKey(t)
               right_branch = BinaryTree('?')
               currentTree.insertRight(right_branch)
@@ -62,7 +62,7 @@ class DASK_ParseTree:
           elif t == ')':
               currentTree = stack.pop(-1)
           else:
-              currentTree.setKey(int(t))
+              currentTree.setKey(t)
               currentTree = stack.pop(-1)
 
       return tree
@@ -74,26 +74,40 @@ class DASK_ParseTree:
       op = tree.getKey()
 
       if leftTree != None and rightTree != None:
-          if op == '+':
-              return self.evaluate(leftTree) + self.evaluate(rightTree)
-          if op == '-':
-              return self.evaluate(leftTree) - self.evaluate(rightTree)
-          if op == '/':
-              return self.evaluate(leftTree) / self.evaluate(rightTree)
-          if op == '*':
-              return self.evaluate(leftTree) * self.evaluate(rightTree)
-          if op == '**':
-              return self.evaluate(leftTree) ** self.evaluate(rightTree)
-          if op == '++':
-              return self.summative(self.evaluate(leftTree)) + self.summative(self.evaluate(rightTree))
-          if op == '//':
-              return self.summative(self.evaluate(leftTree)) / self.summative(self.evaluate(rightTree))
+        left_val = self.evaluate(leftTree, hash_table)
+        if left_val is None:
+            return None
+
+        right_val = self.evaluate(rightTree, hash_table)
+        if right_val is None:
+            return None
+
+        if op == '+':
+            return left_val + right_val
+        if op == '-':
+            return left_val - right_val
+        if op == '/':
+            return left_val / right_val
+        if op == '*':
+            return left_val * right_val
+        if op == '**':
+            return left_val ** right_val
+        if op == '++':
+            return self.summative(left_val) + self.summative(right_val)
+        if op == '//':
+            return self.summative(left_val) / self.summative(right_val)
+
+        return None  # unknown operator
+      
+      # there is left right expression that evals to None and current is op
+      if op in self.operations:
+        return None
       
       if op.isalpha():
         # query variable value from table
-        return hash_table[op]
+        return hash_table[op].value if hash_table[op] != None else None
 
-      return op
+      return int(op)
 
 if __name__ == '__main__':
   exp = "( ((10 ++ 5 ) // 3 )) * (Beta - Alpha)"

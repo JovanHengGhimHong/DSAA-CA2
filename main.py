@@ -55,12 +55,13 @@ def add_dask_expresssion(key, exp):
       hash_table[key] = dask_obj
     return
 
-def show_dask_expressions(hash_table, topological_graph):
+def show_dask_expressions(hash_table, topological_graph, sorting_key=lambda x: x.lower(), output=True):
     # since we want to output sorted alphabetically we can use a sorted map
-    sorted_map = SortedMap()
+    sorted_map = SortedMap(sorting_function=sorting_key)
 
-    print('CURRENT EXPRESSION:')
-    print('***************************************')
+    if output:
+      print('CURRENT EXPRESSION:')
+      print('***************************************')
 
     # print the independent ones first
     for var, dask_obj in hash_table.items():
@@ -91,9 +92,10 @@ def show_dask_expressions(hash_table, topological_graph):
       sorted_map[var] = dask_obj
 
     # output all
-    for var, dask_obj in sorted_map.items():
-      print(f'{var}={dask_obj}')
-    return
+    if output:
+      for var, dask_obj in sorted_map.items():
+        print(f'{var}={dask_obj}')
+    return sorted_map
 
 #################################
 # Main Loop
@@ -145,7 +147,19 @@ while choice != '6':
 
   # sort expressions based on result values
   elif choice == '5':
-    pass
+    filename = input("Please enter output file: ")
+    sorted_map = show_dask_expressions(hash_table, topological_graph, sorting_key=lambda x: -hash_table[x].value if hash_table[x].value != None else float('inf'), output=False)
+    with open(filename, 'w') as f:
+      prev = float('-inf')
+      for var, dask_obj in sorted_map.items():
+        if dask_obj.value != prev:
+          f.write(f'\n*** Expressions with value => {dask_obj.value}\n')
+          prev = dask_obj.value
+
+        f.write(f'{var}={''.join(dask_obj.expression)}\n')
+    f.close()
+
+    print('>>>Sorting of DASK expressions completed!')
 
 
   # re-input

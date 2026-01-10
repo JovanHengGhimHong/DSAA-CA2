@@ -1,5 +1,4 @@
 from structures.BinaryTree import BinaryTree
-from structures.HashTable import HashTable
 
 class DASK_ParseTree:
   def __init__(self):

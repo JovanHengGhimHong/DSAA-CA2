@@ -1,7 +1,7 @@
 Lambda=(2*(65.5 +2.25))
 Sigma=(Pi*1)
 Xi=(Iota/2)
-Alpha=(3+5)
+Alpha=(3*5)
 Beta=(Pi+0)
 Delta=(Alpha*Pi)
 Iota=(Pi+Theta)

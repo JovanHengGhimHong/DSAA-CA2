@@ -14,14 +14,23 @@ class HashTable:
 
     # this returns a index in my self.keys
     def hashKey(self , key):
-        return (key * 2654435761) & 0xFFFFFFFF % self.size
+      if isinstance(key , str):
+        hash_sum = 0
+        for char in key:
+            hash_sum += ord(char)
+      else:
+        # just int key
+        hash_sum = key
+
+      # idk where i found this formula
+      return (hash_sum * 2654435761) & 0xFFFFFFFF % self.size
 
     def items(self):
       return ((k, v) for k, v in zip(self.keys, self.buckets) if k is not None)
 
 
     def __setitem__(self , key , value):
-        index = self.hashKey(ord(key))
+        index = self.hashKey(key)
         start_index = index
 
         while True:
@@ -49,7 +58,7 @@ class HashTable:
 
     def __getitem__(self, key):
         # same idea of hashing and going over entire keys list
-        index = self.hashKey(ord(key))
+        index = self.hashKey(key)
 
         start_index = index
 

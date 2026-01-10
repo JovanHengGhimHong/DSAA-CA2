@@ -16,6 +16,7 @@ menu_msg = '''
   Please select your choice ('1' , '2', '3' , '4' , '5' , '6'):
     1. Add/Modify DASK Expressions
     2. Display current DASK expressions
+    3. Evaluate a single DASK variable
     6. Exit
 '''
 print(start_msg)
@@ -88,6 +89,23 @@ while choice != '6':
       hash_table[var] = dask_obj
 
       print(f'{var}={dask_obj}')
+
+  # evaluate single expression from hash
+  elif choice == '3':
+    print("Enter the variable you want to evaluate:")
+    var = input().strip()
+    dask_obj = hash_table[var]
+
+    if dask_obj == None:
+      print(f'Variable {var} does not exist!')
+    else:
+      tree = parser.buildParseTree(dask_obj.expression)
+      value = parser.evaluate(tree, hash_table)
+
+      print('\nExpression Tree (Inorder):')
+      tree.print_tree_inorder()
+      print(f'Value of variable "{var}" is {value}')
+    
 
 
   # re-input

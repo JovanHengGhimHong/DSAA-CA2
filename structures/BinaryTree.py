@@ -33,3 +33,12 @@ class BinaryTree:
         else:
             self.right_tree.insertRight(tree)
         return
+
+    def print_tree_inorder(self, level=0):
+      if self.getLeftTree() is not None:
+        self.getLeftTree().print_tree_inorder(level + 1)
+
+      print('.' * level + str(self.getKey()))
+
+      if self.getRightTree() is not None:
+        self.getRightTree().print_tree_inorder(level + 1)

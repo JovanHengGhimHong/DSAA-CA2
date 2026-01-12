@@ -41,6 +41,12 @@ class DASK_ParseTree:
     return tokens
 
   def buildParseTree(self, tokens):
+      # Just a check for single value expressions like (42) or (Pi)
+      if len(tokens) == 3:
+        # since all exps are paranthesized we just need to check len = 3
+        return BinaryTree(tokens[1])
+
+
       tree = BinaryTree('?')
       stack = Stack()
       stack.push(tree)
@@ -51,13 +57,13 @@ class DASK_ParseTree:
           if t == '(':
               next_branch = BinaryTree('?')
               currentTree.insertLeft(next_branch)
-              stack.append(currentTree)
+              stack.push(currentTree)
               currentTree = next_branch
           elif t in self.operations:
               currentTree.setKey(t)
               right_branch = BinaryTree('?')
               currentTree.insertRight(right_branch)
-              stack.append(currentTree)
+              stack.push(currentTree)
               currentTree = right_branch
           elif t == ')':
               currentTree = stack.pop()
@@ -72,13 +78,6 @@ class DASK_ParseTree:
       leftTree = tree.getLeftTree()
       rightTree = tree.getRightTree()
       op = tree.getKey()
-
-      # for single '?' nodes which handles single value expressions (no operations)
-      if op == '?':
-          if leftTree is not None:
-              return self.evaluate(leftTree, hash_table)
-          if rightTree is not None:
-              return self.evaluate(rightTree, hash_table)
 
       # main evaluation
       if leftTree != None and rightTree != None:

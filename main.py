@@ -1,7 +1,10 @@
+import os
 import networkx as nx
 from structures.DASK_ParseTree import DASK_ParseTree
 from structures.SortedMap import SortedMap
 from structures.HashTable import HashTable, Dask
+from src.get_dask_data import get_dask_data
+from src.build_html import build_html
 
 start_msg = '''
 *******************************************************************************
@@ -20,7 +23,8 @@ menu_msg = '''
     3. Evaluate a single DASK variable
     4. Read DASK expressions from file
     5. Sort DASK expressions
-    6. Exit
+    6. DASK Report
+    7. Exit
 '''
 print(start_msg)
 print(menu_msg)
@@ -32,7 +36,6 @@ topological_graph = nx.DiGraph()
 
 def add_dask_expresssion(key, exp):
     tokens = parser.tokenizer(exp)
-    print(key , tokens)
 
     # Parse tree build and evaluate
     hash_table[key] = Dask(expression=tokens, value=None)
@@ -101,7 +104,7 @@ def show_dask_expressions(hash_table, topological_graph, sorting_key=lambda x: x
 # Main Loop
 #################################
 choice = input("Enter choice: ")
-while choice != '6':
+while choice != '7':
   # Expression Storing/Modify
   if choice == '1':
     print("Enter the DASK expression you want to add/modify:")
@@ -160,6 +163,27 @@ while choice != '6':
     f.close()
 
     print('>>>Sorting of DASK expressions completed!')
+
+    
+  # Jovan - DASK Report
+  elif choice == '6':
+    output_path = input("Please enter output HTML file path: ")
+
+    # get data
+    data = get_dask_data(topological_graph, show_dask_expressions(hash_table, topological_graph, output=False), parser.buildParseTree)
+    print(data)
+
+    # build html
+    build_html(data, output_path)
+
+    print(f'DASK Report generated successfully at {output_path}!')
+
+    # query open
+    open_query = input('Do you want to open the report now? (y/n): ')
+
+    if open_query.lower() == 'y':
+      os.startfile(output_path)
+
 
 
   # re-input

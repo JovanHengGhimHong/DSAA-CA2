@@ -7,6 +7,8 @@ class Dask:
     return f'{"".join(self.expression)}=> {self.value}'
   
 class HashTable:
+    DELETE = object() # tombstone marker for deletion
+
     def __init__(self , size):
         self.size = size
         self.keys = [None] * size
@@ -23,10 +25,10 @@ class HashTable:
         hash_sum = key
 
       # idk where i found this formula
-      return (hash_sum * 2654435761) & 0xFFFFFFFF % self.size
+      return hash_sum % self.size
 
     def items(self):
-      return ((k, v) for k, v in zip(self.keys, self.buckets) if k is not None)
+      return ((k, v) for k, v in zip(self.keys, self.buckets) if k is not None and k != HashTable.DELETE)
 
 
     def __setitem__(self , key , value):
@@ -35,7 +37,7 @@ class HashTable:
 
         while True:
             # if empty we just use
-            if self.keys[index] == None: 
+            if self.keys[index] == None or self.keys[index] == HashTable.DELETE: 
                 # assign the key to this index (hash)
                 # assign value to same index
                 self.keys[index] = key
@@ -64,6 +66,9 @@ class HashTable:
 
 
         while True:
+            if self.keys[index] == None:
+                return None # key doesn't exist early exit
+
             if self.keys[index] == key:
                 return self.buckets[index]
 
@@ -74,6 +79,25 @@ class HashTable:
                 if index == start_index:
                     return None 
 
+                    
+    def __delitem__(self , key):
+        index = self.hashKey(key)
+        start_index = index
+
+        while True:
+            if self.keys[index] == key:
+                # mark as deleted
+                self.keys[index] = HashTable.DELETE
+                self.buckets[index] = None
+                break
+
+            else:
+                index = self.hashKey(index + 1)
+
+                # this key doesn't exist
+                if index == start_index:
+                    break
+
 
     def __repr__(self):
         output_string = "{"
@@ -81,7 +105,17 @@ class HashTable:
             output_string += f'\n\t{k}:  {v}'
         return output_string + "\n}"
 
+if __name__ == '__main__':
+    # simple test
+    ht = HashTable(5)
+    names = ['apple', 'banana', 'grape', 'orange', 'mango', 'peach']
+    for i, name in enumerate(names):
+        ht[name] = i
 
+    print(ht)
+    del ht['banana']
+    del ht['orange']
+    print(ht)
 
         
 

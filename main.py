@@ -5,6 +5,11 @@ from structures.SortedMap import SortedMap
 from structures.HashTable import HashTable, Dask
 from src.get_dask_data import get_dask_data
 from src.build_html import build_html
+def clear():
+  if os.name == 'nt':
+    os.system('cls')
+  else:
+    os.system('clear')
 
 start_msg = '''
 *******************************************************************************
@@ -23,8 +28,9 @@ menu_msg = '''
     3. Evaluate a single DASK variable
     4. Read DASK expressions from file
     5. Sort DASK expressions
-    6. DASK Report
-    7. Exit
+    6. DASK Report - Jovan
+    7. Temp DASK Variable Visualizer - Jovan
+    8. Exit
 '''
 print(start_msg)
 print(menu_msg)
@@ -104,7 +110,7 @@ def show_dask_expressions(hash_table, topological_graph, sorting_key=lambda x: x
 # Main Loop
 #################################
 choice = input("Enter choice: ")
-while choice != '7':
+while choice != '8':
   # Expression Storing/Modify
   if choice == '1':
     print("Enter the DASK expression you want to add/modify:")
@@ -184,7 +190,59 @@ while choice != '7':
     if open_query.lower() == 'y':
       os.startfile(output_path)
 
+  # Jovan - Temp DASK Variable Visualizer
+  elif choice == '7':
+    clear()
+    show_dask_expressions(hash_table, topological_graph)
+    print('\nPlease enter expressions to visualize DASK Variables (q to quit):')
+    exp = input()
+    pending_keys = []
 
+    while exp != 'q':
+      key , expression = exp.strip().split('=', 1)
+      pending_keys.append(key)
+      add_dask_expresssion(key, expression)
+      clear()
+
+      sorted_map = show_dask_expressions(hash_table, topological_graph, output=False)
+      print(sorted_map.items())
+
+      # custom print
+      for var, dask_obj in sorted_map.items():
+        if var in pending_keys:
+          print(f'***{var}={dask_obj}***')
+        else:
+          print(f'{var}={dask_obj}')
+
+      print('\nPlease enter expressions to visualize DASK Variables (q to quit):')
+      exp = input()
+
+    # show 'pending' expressions to add
+    if len(pending_keys) > 0:
+      print('\nThe following expressions were not added:')
+      print('***********************************************')
+      for pk in pending_keys:
+        dask_obj = hash_table[pk]
+        print(f'{pk}={dask_obj}')
+
+      add_expressions = input('Do you want to add these expressions? (y/n): ')
+
+      if add_expressions.lower() == 'n':
+        # remove since theyre alr stored
+        for pk in pending_keys:
+          del hash_table[pk]
+
+          # handle graph edges 
+          if pk in topological_graph:
+            topological_graph.remove_node(pk)
+
+    clear()
+    
+    
+ 
+  # invalid
+  else:
+    print('That is not a valid choice. Please try again.')
 
   # re-input
   print('\n'*3)

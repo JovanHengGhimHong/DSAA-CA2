@@ -5,6 +5,64 @@ class DASK_ParseTree:
   def __init__(self):
     self.operations = ['+' , '-' , '/' , '*' , '**' , '++' , '//']
 
+
+  def verify_expression(self, exp):
+    '''
+    Returns False if bad, True if ok
+    '''
+    tokens = self.tokenizer(exp)
+    stack = Stack()
+    for t in tokens:
+
+      if t == ')':
+        # we backtrack the stack
+        if stack.is_empty():
+          return False
+
+        exp_group = []
+        while not stack.is_empty():
+          top = stack.pop() 
+
+          if top == '(':
+            break
+          else:
+            exp_group.append(top)
+
+        else:
+          # we didnt find a matching (
+          return False
+
+        exp_group.reverse()
+        # now we have a expression group
+        # since we are dealing with binary trees the only exp check is len(3), start end in brackets, 2 values. mid is operator
+
+        if len(exp_group) == 1 and (exp_group[0].isalpha() or exp_group[0].replace('.','',1).isdigit()):
+          # single value expression ok
+          stack.push('EXP')
+          continue
+
+        if len(exp_group) != 3:
+          return False
+        # operator
+        if exp_group[1] not in self.operations:
+          return False
+        # values
+        if not (exp_group[0].isalpha() or exp_group[0].replace('.','',1).isdigit()):
+          return False
+        if not (exp_group[2].isalpha() or exp_group[2].replace('.','',1).isdigit()):
+          return False
+
+        # push a placeholder variabel
+        stack.push('EXP')
+
+        
+      else:
+        stack.push(t)
+        
+
+      # we should end with 'EXP' only
+    return stack.size() == 1 and stack.pop() == 'EXP'
+        
   def summative(self , a ):
     return a * ( a + 1 ) // 2 
 
@@ -119,7 +177,8 @@ class DASK_ParseTree:
       return float(op)
 
 if __name__ == '__main__':
-  exp = "( ((10 ++ 5 ) // 3 )) * (Beta - Alpha)"
+  exp = "((a + b) * (c - d))"
+  exp = "(24)"
   parser = DASK_ParseTree()
   tokens = parser.tokenizer(exp)
-  print(tokens)
+  print("Is expression valid? ", parser.verify_expression(tokens))

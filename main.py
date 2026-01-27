@@ -7,6 +7,7 @@ from src.get_dask_data import get_dask_data
 from src.build_html import build_html
 from src.clear import clear
 from src.validators import input_file_path, dask_input, yes_no_input
+from src.dependency_analyzer import print_dependency_analysis, print_reverse_dependency_query
 
 
 start_msg = '''
@@ -20,7 +21,7 @@ start_msg = '''
 *******************************************************************************
 '''
 menu_msg = '''
-  Please select your choice ('1' , '2', '3' , '4' , '5' , '6'):
+  Please select your choice ('1' , '2', '3' , '4' , '5' , '6', '7', '8', '9', '10'):
     1. Add/Modify DASK Expressions
     2. Display current DASK expressions
     3. Evaluate a single DASK variable
@@ -28,7 +29,9 @@ menu_msg = '''
     5. Sort DASK expressions
     6. DASK Report - Jovan
     7. Temp DASK Variable Visualizer - Jovan
-    8. Exit
+    8. Analyze dependencies & detect circular references
+    9. Reverse dependency query
+    10. Exit
 '''
 print(start_msg)
 print(menu_msg)
@@ -108,7 +111,7 @@ def show_dask_expressions(hash_table, topological_graph, sorting_key=lambda x: x
 # Main Loop
 #################################
 choice = input("Enter choice: ")
-while choice != '8':
+while choice != '10':
   # Expression Storing/Modify
   if choice == '1':
     print("Enter the DASK expression you want to add/modify:")
@@ -173,7 +176,8 @@ while choice != '8':
           f.write(f'\n*** Expressions with value => {dask_obj.value}\n')
           prev = dask_obj.value
 
-        f.write(f'{var}={''.join(dask_obj.expression)}\n')
+        exp_str = ''.join(dask_obj.expression)
+        f.write(f'{var}={exp_str}\n')
     f.close()
 
     print('>>>Sorting of DASK expressions completed!')
@@ -249,6 +253,28 @@ while choice != '8':
             topological_graph.remove_node(pk)
 
     clear()
+
+  # Dependency Analysis & Circular Reference Detection
+  elif choice == '8':
+    if len(list(hash_table.items())) == 0:
+      print("No DASK expressions loaded. Please add expressions first.")
+    else:
+      print_dependency_analysis(hash_table)
+
+  # Reverse Dependency Query
+  elif choice == '9':
+    if len(list(hash_table.items())) == 0:
+      print("No DASK expressions loaded. Please add expressions first.")
+    else:
+      print("Enter the variable you want to query:")
+      print("(This will show which variables depend on it)\n")
+      query_var = input("Variable name: ").strip()
+      
+      while not query_var:
+        print("Please enter a valid variable name.")
+        query_var = input("Variable name: ").strip()
+      
+      print_reverse_dependency_query(hash_table, query_var)
     
   # invalid
   else:

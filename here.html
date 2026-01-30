@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>DASK Graph & Parse Tree Report (Offline)</title>
+    <style>
+      :root {
+        --container-width: 1100px;
+        --card-bg: #fff;
+        --card-border: #ddd;
+        --accent: #2b6cb0;
+        --muted: #6b7280;
+        --pad: 18px;
+      }
+
+      body {
+        font-family: Inter, Roboto, 'Segoe UI', Arial, sans-serif;
+        background: #f6f7fb;
+        margin: 0;
+        color: #111827;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .page {
+        max-width: var(--container-width);
+        margin: 20px auto;
+        padding: 0 20px;
+      }
+
+      h1 {
+        margin: 8px 0 18px;
+        font-size: 20px;
+        color: var(--accent);
+      }
+
+      /* Card style */
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        padding: var(--pad);
+        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+      }
+
+      .top-half {
+        height: 380px;
+        margin-bottom: 20px;
+      }
+
+      /* container with scroll and drag */
+      .frame {
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        cursor: grab;
+      }
+      .frame:active {
+        cursor: grabbing;
+      }
+
+      /* layout bottom section: left 3 / right 9 using grid */
+      .bottom {
+        display: grid;
+        grid-template-columns: 1fr 3fr;
+        gap: 16px;
+        align-items: start;
+      }
+
+      .variables-list {
+        max-height: 420px;
+        overflow: auto;
+        padding: 6px;
+      }
+
+      .variable-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 10px;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        border: 1px solid transparent;
+        transition: all 0.12s ease;
+        background: #fff;
+      }
+      .variable-item:hover {
+        box-shadow: 0 2px 6px rgba(16, 24, 40, 0.04);
+        transform: translateY(-1px);
+      }
+      .variable-item.selected {
+        border-color: var(--accent);
+        background: linear-gradient(
+          90deg,
+          rgba(43, 108, 176, 0.06),
+          rgba(43, 108, 176, 0.02)
+        );
+      }
+
+      .var-name {
+        font-weight: 600;
+        color: #0f172a;
+        margin-right: 8px;
+      }
+      .var-sum {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      /* parse tree card */
+      .parse-card {
+        display: flex;
+        flex-direction: column;
+        height: 420px;
+      }
+      .parse-header {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .parse-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #0f172a;
+      }
+      .parse-sub {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      /* svg container size */
+      #svgContainer {
+        width: 100%;
+        height: 100%;
+      }
+
+      /* make svg scale to content */
+      svg {
+        display: block;
+      }
+
+      /* small UI */
+      .meta {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      /* responsive */
+      @media (max-width: 880px) {
+        .bottom {
+          grid-template-columns: 1fr;
+        }
+        .top-half {
+          height: 260px;
+        }
+        .parse-card {
+          height: 320px;
+        }
+      }
+
+      /* ensure scrollbars visible when overflow */
+      .scrollable {
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1 style="text-align: center; font-size: 40px">
+        ALD — DASK Expressions Overview
+      </h1>
+
+      <div class="card top-half">
+        <div class="meta">
+          <div>
+            Topological dependency graph (nodes = variables; arrows point from
+            dependency → dependent)
+          </div>
+        </div>
+        <div id="svgFrame" class="frame" style="height: 300px">
+          <!-- SVG will be injected here -->
+        </div>
+      </div>
+
+      <div class="bottom" style="margin-top: 14px">
+        <div class="card">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                gap: 10px;
+              "
+            >
+              <div style="font-weight: 700">Variables</div>
+              <div style="color: var(--muted); font-size: 13px">
+                Click a variable to view its parse tree
+              </div>
+            </div>
+          </div>
+
+          <div
+            id="varList"
+            class="variables-list scrollable"
+            style="margin-top: 10px; padding-right: 6px"
+          >
+            <!-- variable items dynamically generated -->
+          </div>
+        </div>
+
+        <div class="card parse-card">
+          <div class="parse-header">
+            <div class="parse-title" id="parseTitle">Select a variable</div>
+            <div class="parse-sub" id="parseSub">
+              Expression and evaluated value will appear here
+            </div>
+          </div>
+
+          <div
+            id="canvasFrame"
+            class="frame"
+            style="flex: 1; display: flex; align-items: stretch"
+          >
+            <canvas
+              id="treeCanvas"
+              width="800"
+              height="320"
+              style="
+                width: 100%;
+                height: 100%;
+                background: #fff;
+                border-radius: 6px;
+              "
+            ></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /*
+  Single-file offline demo:
+  - builds an SVG dependency DAG and draws it inside #svgFrame
+  - renders parse tree for the selected variable on canvas
+  - uses mock data; replace with your real JSON export
+  - implements drag-to-scroll on containers with class 'frame'
+*/
+
+      // -------------------- MOCK DATA --------------------
+      // nodes implicitly taken from edges + independent nodes
+      const mock = {
+        "edges": [["Pi", "Sigma"], ["Pi", "Beta"], ["Pi", "Delta"], ["Pi", "Iota"], ["Pi", "Mu"], ["Sigma", "Mu"], ["Iota", "Xi"], ["Beta", "Mu"], ["Alpha", "Delta"], ["Alpha", "Pi"], ["Alpha", "Mu"], ["Delta", "Mu"], ["Theta", "Iota"], ["Gamma", "Mu"]], "nodes": ["Pi", "Delta", "Xi", "Sigma", "Gamma", "Iota", "Mu", "Theta", "Beta", "Alpha"], "parseTrees": {"Alpha": {"value": "*", "left": {"value": "3"}, "right": {"value": "5"}}, "Beta": {"value": "+", "left": {"value": "Pi"}, "right": {"value": "0"}}, "Delta": {"value": "*", "left": {"value": "Alpha"}, "right": {"value": "Pi"}}, "Gamma": {"value": "+", "left": {"value": "1"}, "right": {"value": "0"}}, "Iota": {"value": "+", "left": {"value": "Pi"}, "right": {"value": "Theta"}}, "Lambda": {"value": "*", "left": {"value": "2"}, "right": {"value": "+", "left": {"value": "65.5"}, "right": {"value": "2.25"}}}, "Mu": {"value": "/", "left": {"value": "+", "left": {"value": "Alpha"}, "right": {"value": "+", "left": {"value": "Delta"}, "right": {"value": "*", "left": {"value": "Pi"}, "right": {"value": "*", "left": {"value": "Beta"}, "right": {"value": "/", "left": {"value": "Gamma"}, "right": {"value": "Sigma"}}}}}}, "right": {"value": "2"}}, "Omicron": {"value": "24"}, "Pi": {"value": "+", "left": {"value": "Alpha"}, "right": {"value": "1"}}, "Sigma": {"value": "*", "left": {"value": "Pi"}, "right": {"value": "1"}}, "Xi": {"value": "/", "left": {"value": "Iota"}, "right": {"value": "2"}}, "Zeta": {"value": "//", "left": {"value": "3"}, "right": {"value": "++", "left": {"value": "4"}, "right": {"value": "5"}}}}, "meta": {"Alpha": {"expr": "( 3 * 5 )", "value": 15.0}, "Beta": {"expr": "( Pi + 0 )", "value": 16.0}, "Delta": {"expr": "( Alpha * Pi )", "value": 240.0}, "Gamma": {"expr": "( 1 + 0 )", "value": 1.0}, "Iota": {"expr": "( Pi + Theta )", "value": "N/A"}, "Lambda": {"expr": "( 2 * ( 65.5 + 2.25 ) )", "value": 135.5}, "Mu": {"expr": "( ( Alpha + ( Delta + ( Pi * ( Beta * ( Gamma / Sigma ) ) ) ) ) / 2 )", "value": 135.5}, "Omicron": {"expr": "( 24 )", "value": 24.0}, "Pi": {"expr": "( Alpha + 1 )", "value": 16.0}, "Sigma": {"expr": "( Pi * 1 )", "value": 16.0}, "Xi": {"expr": "( Iota / 2 )", "value": "N/A"}, "Zeta": {"expr": "( 3 // ( 4 ++ 5 ) )", "value": 0.018461538461538463}}
+      }
+
+      // -------------------- Utilities --------------------
+      function unique(arr) {
+        return Array.from(new Set(arr))
+      }
+
+      // Kahn's algorithm for topological sort (returns order or throws on cycle)
+      function topologicalSort(nodes, edges) {
+        // build adjacency and indegree
+        const adj = {}
+        const indeg = {}
+        nodes.forEach((n) => {
+          adj[n] = []
+          indeg[n] = 0
+        })
+        edges.forEach(([u, v]) => {
+          adj[u].push(v)
+          indeg[v] = (indeg[v] || 0) + 1
+        })
+
+        const q = []
+        for (const n of nodes) if ((indeg[n] || 0) === 0) q.push(n)
+
+        const order = []
+        while (q.length) {
+          const u = q.shift()
+          order.push(u)
+          for (const v of adj[u]) {
+            indeg[v]--
+            if (indeg[v] === 0) q.push(v)
+          }
+        }
+
+        if (order.length !== nodes.length) {
+          throw new Error('Graph contains cycle or nodes missing from edges')
+        }
+        return order
+      }
+
+      // compute levels: level = 0 for nodes with no predecessors; else 1 + max(pred.level)
+      function computeLevels(nodes, edges) {
+        const preds = {}
+        nodes.forEach((n) => (preds[n] = []))
+        edges.forEach(([u, v]) => preds[v].push(u))
+
+        // topo order
+        const order = topologicalSort(nodes, edges)
+        const level = {}
+        for (const n of order) {
+          if (!preds[n] || preds[n].length === 0) level[n] = 0
+          else {
+            level[n] = 1 + Math.max(...preds[n].map((p) => level[p]))
+          }
+        }
+        return level
+      }
+
+      // build adjacency map
+      function adjacencyFromEdges(nodes, edges) {
+        const adj = {}
+        nodes.forEach((n) => (adj[n] = []))
+        edges.forEach(([u, v]) => adj[u].push(v))
+        return adj
+      }
+
+      // -------------------- SVG DAG RENDERER --------------------
+      function buildSVGGraph(containerEl, nodes, edges) {
+        containerEl.innerHTML = '' // clear
+
+        // create SVG element with larger width/height to accomodate layout
+        const svgNS = 'http://www.w3.org/2000/svg'
+        const svg = document.createElementNS(svgNS, 'svg')
+        svg.setAttribute('width', '1200') // large virtual canvas
+        svg.setAttribute('height', '800')
+        svg.setAttribute('viewBox', '0 0 1200 800')
+        svg.style.display = 'block'
+        svg.style.background = '#fff'
+        svg.style.borderRadius = '6px'
+
+        // defs for arrowhead
+        const defs = document.createElementNS(svgNS, 'defs')
+        const marker = document.createElementNS(svgNS, 'marker')
+        marker.setAttribute('id', 'arrow')
+        marker.setAttribute('markerWidth', '10')
+        marker.setAttribute('markerHeight', '10')
+        marker.setAttribute('refX', '10')
+        marker.setAttribute('refY', '5')
+        marker.setAttribute('orient', 'auto')
+        const path = document.createElementNS(svgNS, 'path')
+        path.setAttribute('d', 'M0,0 L10,5 L0,10 z')
+        path.setAttribute('fill', '#374151')
+        marker.appendChild(path)
+        defs.appendChild(marker)
+        svg.appendChild(defs)
+
+        // compute levels
+        const levelMap = computeLevels(nodes, edges)
+        // group nodes by level
+        const levels = {}
+        nodes.forEach((n) => {
+          const L = levelMap[n] || 0
+          levels[L] = levels[L] || []
+          levels[L].push(n)
+        })
+
+        // layout: each level gets a y; distribute nodes evenly across width (with padding)
+        const svgW = 1100,
+          svgH = 700
+        const leftPad = 80,
+          rightPad = 80,
+          topPad = 40,
+          levelGap = 120
+        const maxLevel = Math.max(...Object.keys(levels).map((k) => +k))
+        const levelCount = maxLevel + 1
+
+        const positions = {} // node -> {x,y}
+        Object.keys(levels).forEach((l) => {
+          const nodesAt = levels[l]
+          const y = topPad + +l * levelGap
+          const availW = svgW - leftPad - rightPad
+          const spacing = nodesAt.length > 1 ? availW / nodesAt.length : 0
+          nodesAt.forEach((n, idx) => {
+            // center each node in its "slot"
+            let x = leftPad + (idx + 0.5) * spacing
+            if (nodesAt.length === 1) x = leftPad + availW / 2
+            positions[n] = { x, y }
+          })
+        })
+
+        // draw edges (behind nodes)
+        edges.forEach(([u, v]) => {
+          const pu = positions[u]
+          const pv = positions[v]
+          // simple straight line with a small offset from node radius
+          const line = document.createElementNS(svgNS, 'line')
+          const r = 22
+          // compute vector from pu->pv and shorten by r
+          const dx = pv.x - pu.x
+          const dy = pv.y - pu.y
+          const len = Math.hypot(dx, dy) || 1
+          const sx = pu.x + (dx / len) * r
+          const sy = pu.y + (dy / len) * r
+          const ex = pv.x - (dx / len) * r
+          const ey = pv.y - (dy / len) * r
+          line.setAttribute('x1', sx)
+          line.setAttribute('y1', sy)
+          line.setAttribute('x2', ex)
+          line.setAttribute('y2', ey)
+          line.setAttribute('stroke', '#374151')
+          line.setAttribute('stroke-width', '1.2')
+          line.setAttribute('marker-end', 'url(#arrow)')
+          svg.appendChild(line)
+        })
+
+        // draw nodes (circles + labels)
+        Object.keys(positions).forEach((node) => {
+          const p = positions[node]
+
+          const g = document.createElementNS(svgNS, 'g')
+          g.setAttribute('data-node', node)
+          g.style.cursor = 'pointer'
+
+          const circle = document.createElementNS(svgNS, 'circle')
+          circle.setAttribute('cx', p.x)
+          circle.setAttribute('cy', p.y)
+          circle.setAttribute('r', 22)
+          circle.setAttribute('fill', '#fff')
+          circle.setAttribute('stroke', '#374151')
+          circle.setAttribute('stroke-width', '1.2')
+          g.appendChild(circle)
+
+          const text = document.createElementNS(svgNS, 'text')
+          text.setAttribute('x', p.x)
+          text.setAttribute('y', p.y + 4)
+          text.setAttribute('text-anchor', 'middle')
+          text.setAttribute('font-size', '16')
+          text.setAttribute('fill', '#111827')
+          text.textContent = node
+          g.appendChild(text)
+
+          // small value subtext
+          const sub = document.createElementNS(svgNS, 'text')
+          sub.setAttribute('x', p.x)
+          sub.setAttribute('y', p.y + 20)
+          sub.setAttribute('text-anchor', 'middle')
+          sub.setAttribute('font-size', '13')
+          sub.setAttribute('fill', '#6b7280')
+          const val = mock.meta[node] ? mock.meta[node].value : ''
+          sub.textContent = val !== undefined ? String(val) : ''
+          g.appendChild(sub)
+
+          // attach click handler
+          g.addEventListener('click', (ev) => {
+            ev.stopPropagation()
+            selectVariable(node)
+            highlightSvgNode(svg, node)
+          })
+
+          // hover style
+          g.addEventListener('mouseenter', () => {
+            circle.setAttribute('stroke-width', '2')
+            circle.setAttribute('stroke', '#1e40af')
+          })
+          g.addEventListener('mouseleave', () => {
+            circle.setAttribute('stroke-width', '1.2')
+            circle.setAttribute('stroke', '#374151')
+          })
+
+          svg.appendChild(g)
+        })
+
+        containerEl.appendChild(svg)
+
+        // center or set scroll to top-left
+        containerEl.scrollLeft = 0
+        containerEl.scrollTop = 0
+
+        // return svg for further manipulation
+        return svg
+      }
+
+      function highlightSvgNode(svgElement, nodeId) {
+        // remove previous highlights
+        const prev = svgElement.querySelectorAll('g.highlighted')
+        prev.forEach((p) => {
+          p.classList.remove('highlighted')
+          const circle = p.querySelector('circle')
+          if (circle) {
+            circle.setAttribute('stroke', '#374151')
+            circle.setAttribute('stroke-width', '1.2')
+          }
+        })
+        // find group
+        const g = svgElement.querySelector(`g[data-node="${nodeId}"]`)
+        if (g) {
+          g.classList.add('highlighted')
+          const circle = g.querySelector('circle')
+          if (circle) {
+            circle.setAttribute('stroke', '#e11d48')
+            circle.setAttribute('stroke-width', '2.5')
+          }
+          // ensure visible (scroll to center)
+          const frame = document.getElementById('svgFrame')
+          const box = g.getBoundingClientRect()
+          const fbox = frame.getBoundingClientRect()
+          // compute offset within svgFrame
+          const offsetX = box.left - fbox.left + frame.scrollLeft
+          const offsetY = box.top - fbox.top + frame.scrollTop
+          // center node in frame
+          frame.scrollLeft = Math.max(
+            0,
+            offsetX - frame.clientWidth / 2 + box.width / 2
+          )
+          frame.scrollTop = Math.max(
+            0,
+            offsetY - frame.clientHeight / 2 + box.height / 2
+          )
+        }
+      }
+
+      // -------------------- VARIABLES LIST (left column) --------------------
+      let selectedVar = null
+      function renderVarList(container, nodes, meta) {
+        container.innerHTML = ''
+        const frag = document.createDocumentFragment()
+        nodes.sort()
+        nodes.forEach((n) => {
+          const div = document.createElement('div')
+          div.className = 'variable-item'
+          div.setAttribute('data-var', n)
+
+          const left = document.createElement('div')
+          left.style.display = 'flex'
+          left.style.flexDirection = 'column'
+          const title = document.createElement('div')
+          title.className = 'var-name'
+          title.textContent = n
+          const subtitle = document.createElement('div')
+          subtitle.className = 'var-sum'
+          subtitle.textContent = meta[n] ? meta[n].expr : ''
+
+          left.appendChild(title)
+          left.appendChild(subtitle)
+
+          const right = document.createElement('div')
+          right.style.fontSize = '13px'
+          right.style.color = '#374151'
+          right.textContent =
+            meta[n] && meta[n].value !== undefined
+              ? String(meta[n].value)
+              : '--'
+
+          div.appendChild(left)
+          div.appendChild(right)
+
+          div.addEventListener('click', () => {
+            selectVariable(n)
+            // highlight in list
+            container
+              .querySelectorAll('.variable-item')
+              .forEach((el) => el.classList.remove('selected'))
+            div.classList.add('selected')
+            // highlight in svg too
+            const svg = document.querySelector('#svgFrame svg')
+            if (svg) highlightSvgNode(svg, n)
+          })
+
+          frag.appendChild(div)
+        })
+        container.appendChild(frag)
+      }
+
+      // -------------------- CANVAS PARSE TREE RENDERER --------------------
+      const canvas = document.getElementById('treeCanvas')
+      const ctx = canvas.getContext('2d')
+
+      function clearCanvas() {
+        // clear canvas size
+        canvas.width = canvas.clientWidth * window.devicePixelRatio
+        canvas.height = canvas.clientHeight * window.devicePixelRatio
+        ctx.setTransform(
+          window.devicePixelRatio,
+          0,
+          0,
+          window.devicePixelRatio,
+          0,
+          0
+        )
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+      }
+
+      // compute inorder x positions using a simple layout (assign x to leaves incrementally)
+      function layoutTree(
+        node,
+        depth = 0,
+        state = { nextX: 0, positions: {} }
+      ) {
+        if (!node) return null
+        if (!node.left && !node.right) {
+          const x = state.nextX++
+          state.positions[node._id] = { x, y: depth }
+          return state.positions[node._id]
+        }
+        // left subtree
+        let leftPos = null,
+          rightPos = null
+        if (node.left) leftPos = layoutTree(node.left, depth + 1, state)
+        if (node.right) rightPos = layoutTree(node.right, depth + 1, state)
+
+        // compute current node x as midpoint of children's x or use available x
+        let x
+        if (leftPos && rightPos) x = (leftPos.x + rightPos.x) / 2
+        else if (leftPos) x = leftPos.x + 0.5
+        else if (rightPos) x = rightPos.x - 0.5
+        else x = state.nextX++
+
+        state.positions[node._id] = { x, y: depth }
+        return state.positions[node._id]
+      }
+
+      // augment tree with unique ids to map positions
+      function cloneWithIds(tree, idGen) {
+        if (!tree) return null
+        const node = {
+          value: tree.value,
+          left: null,
+          right: null,
+          _id: idGen(),
+        }
+        if (tree.left) node.left = cloneWithIds(tree.left, idGen)
+        if (tree.right) node.right = cloneWithIds(tree.right, idGen)
+        return node
+      }
+
+      function drawTreeOnCanvas(treeObj, metaForVar) {
+        clearCanvas()
+        if (!treeObj) {
+          // show placeholder
+          ctx.fillStyle = '#6b7280'
+          ctx.font = '14px sans-serif'
+          ctx.fillText('No parse tree available', 12, 20)
+          return
+        }
+
+        // clone with ids
+        let id = 0
+        const idGen = () => 'n' + id++
+        const tree = cloneWithIds(treeObj, idGen)
+
+        // layout
+        const state = { nextX: 0, positions: {} }
+        layoutTree(tree, 0, state)
+        const positions = state.positions
+        const leaves = state.nextX || 1
+        const canvasW = canvas.clientWidth
+        const canvasH = canvas.clientHeight
+
+        // compute spacing
+        const horizPad = 40
+        const vertGap = 70
+        const usableW = Math.max(100, canvasW - 2 * horizPad)
+        const unitX = usableW / Math.max(1, leaves)
+        const centerX = horizPad
+
+        // convert logical positions to pixel positions
+        function px(p) {
+          return {
+            x: centerX + p.x * unitX,
+            y: 30 + p.y * vertGap,
+          }
+        }
+
+        // draw edges by traversing nodes
+        function drawEdges(n) {
+          if (!n) return
+          const p = px(positions[n._id])
+          if (n.left) {
+            const lp = px(positions[n.left._id])
+            drawLine(p.x, p.y, lp.x, lp.y)
+            drawEdges(n.left)
+          }
+          if (n.right) {
+            const rp = px(positions[n.right._id])
+            drawLine(p.x, p.y, rp.x, rp.y)
+            drawEdges(n.right)
+          }
+        }
+
+        function drawLine(x1, y1, x2, y2) {
+          ctx.strokeStyle = '#94a3b8'
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          ctx.moveTo(x1, y1 + 14)
+          ctx.lineTo(x2, y2 - 14)
+          ctx.stroke()
+        }
+
+        // draw nodes (circles) and labels
+        function drawNodes(n) {
+          if (!n) return
+          const p = px(positions[n._id])
+          // circle
+          ctx.fillStyle = '#fff'
+          ctx.strokeStyle = '#0f172a'
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          ctx.arc(p.x, p.y, 20, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.stroke()
+
+          // label
+          ctx.fillStyle = '#0f172a'
+          ctx.font = '13px sans-serif'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(String(n.value), p.x, p.y)
+
+          drawNodes(n.left)
+          drawNodes(n.right)
+        }
+
+        // start drawing
+        drawEdges(tree)
+        drawNodes(tree)
+
+        // optional: draw evaluated value in bottom-right corner
+        if (metaForVar && metaForVar.value !== undefined) {
+          ctx.fillStyle = '#0f172a'
+          ctx.font = '13px sans-serif'
+          ctx.textAlign = 'right'
+          ctx.fillText(
+            'value: ' + String(metaForVar.value),
+            canvasW - 10,
+            canvasH - 10
+          )
+        }
+      }
+
+      // -------------------- selection + wiring --------------------
+      function selectVariable(name) {
+        selectedVar = name
+        // update header
+        const title = document.getElementById('parseTitle')
+        const sub = document.getElementById('parseSub')
+        title.textContent = name || 'Select a variable'
+        const meta = mock.meta[name] || { expr: '', value: '' }
+        sub.textContent =
+          meta.expr +
+          ' => ' +
+          (meta.value !== undefined ? meta.value : 'UNRESOLVED')
+
+        // render parse tree into canvas
+        const tree = mock.parseTrees[name] || null
+        drawTreeOnCanvas(tree, mock.meta[name])
+      }
+
+      // -------------------- drag-to-scroll for frames --------------------
+      function makeDragToScroll(el) {
+        let isDown = false,
+          startX = 0,
+          startY = 0,
+          scrollLeft = 0,
+          scrollTop = 0
+        el.addEventListener('pointerdown', (e) => {
+          isDown = true
+          el.setPointerCapture(e.pointerId)
+          startX = e.clientX
+          startY = e.clientY
+          scrollLeft = el.scrollLeft
+          scrollTop = el.scrollTop
+        })
+        el.addEventListener('pointermove', (e) => {
+          if (!isDown) return
+          const dx = e.clientX - startX
+          const dy = e.clientY - startY
+          el.scrollLeft = scrollLeft - dx
+          el.scrollTop = scrollTop - dy
+        })
+        el.addEventListener('pointerup', (e) => {
+          isDown = false
+          try {
+            el.releasePointerCapture(e.pointerId)
+          } catch (e) {}
+        })
+        el.addEventListener('pointerleave', () => {
+          isDown = false
+        })
+      }
+
+      // -------------------- initialization --------------------
+      function init() {
+        // topological SVG
+        const svgFrame = document.getElementById('svgFrame')
+        const svg = buildSVGGraph(svgFrame, mock.nodes, mock.edges)
+
+        // variables list
+        const varList = document.getElementById('varList')
+        renderVarList(varList, mock.nodes, mock.meta)
+
+        // setup drag-to-scroll on both frames
+        document.querySelectorAll('.frame').forEach(makeDragToScroll)
+
+        // select first variable by default
+        if (mock.nodes.length) {
+          selectVariable(mock.nodes[0])
+          // highlight in varList
+          const firstEl = varList.querySelector('.variable-item')
+          if (firstEl) firstEl.classList.add('selected')
+          highlightSvgNode(svg, mock.nodes[0])
+        }
+
+        // redraw canvas on resize
+        window.addEventListener('resize', () => {
+          // redraw parse tree for selected var
+          selectVariable(selectedVar)
+        })
+      }
+
+      init()
+    </script>
+  </body>
+</html>

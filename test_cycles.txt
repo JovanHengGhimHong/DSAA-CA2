@@ -1,0 +1,12 @@
+x=(10)
+y=(5)
+z=(2)
+
+cyclea=(cycleb+1)
+cycleb=(cyclea*2)
+
+loopc=(loopd+x)
+loopd=(loope*y)
+loope=(loopc+z)
+
+normal=(x+y)

@@ -56,6 +56,11 @@ class ExpressionOptimizer:
             return BinaryTree(str(int(value)))
         return BinaryTree(str(value))
     
+    def _summative(self, n):
+        """Calculate the summative of n: ∑n = n + (n-1) + ... + 1 = n*(n+1)/2"""
+        n = int(n)
+        return n * (n + 1) / 2
+    
     def _apply_rules(self, op, left, right):
         """Apply algebraic simplification rules."""
         left_val = self._get_leaf_value(left)
@@ -154,6 +159,15 @@ class ExpressionOptimizer:
                 return None
             elif op == '**':
                 return left_val ** right_val
+            elif op == '++':
+                # Summative addition: ∑a + ∑b
+                return self._summative(left_val) + self._summative(right_val)
+            elif op == '//':
+                # Summative division: ∑a / ∑b
+                sum_right = self._summative(right_val)
+                if sum_right != 0:
+                    return self._summative(left_val) / sum_right
+                return None
             else:
                 return None
         except:
@@ -198,11 +212,11 @@ class ExpressionOptimizerUI:
 +===============================================================+
 |            Expression Optimizer / Simplifier                  |
 +===============================================================+
-|  1. Optimize a single expression (by variable name)          |
-|  2. Optimize all expressions                                 |
-|  3. Optimize a custom expression (enter manually)            |
-|  4. Show optimization rules                                  |
-|  5. Return to main menu                                      |
+|  1. Optimize a single expression (by variable name)           |
+|  2. Optimize all expressions                                  |
+|  3. Optimize a custom expression (enter manually)             |
+|  4. Show optimization rules                                   |
+|  5. Return to main menu                                       |
 +===============================================================+
 '''
         print(menu)
@@ -403,21 +417,27 @@ class ExpressionOptimizerUI:
 |                     EXPRESSION OPTIMIZATION RULES                         |
 +===========================================================================+
 |                                                                           |
-|  IDENTITY RULES:                                                         |
-|    x + 0 = x       0 + x = x       x - 0 = x                             |
-|    x * 1 = x       1 * x = x       x / 1 = x       x ** 1 = x            |
+|  IDENTITY RULES:                                                          |
+|    x + 0 = x       0 + x = x       x - 0 = x                              |
+|    x * 1 = x       1 * x = x       x / 1 = x       x ** 1 = x             |
 |                                                                           |
-|  ZERO RULES:                                                             |
-|    x * 0 = 0       0 * x = 0       0 / x = 0       0 ** x = 0            |
+|  ZERO RULES:                                                              |
+|    x * 0 = 0       0 * x = 0       0 / x = 0       0 ** x = 0             |
 |                                                                           |
-|  POWER RULES:                                                            |
-|    x ** 0 = 1      1 ** x = 1                                            |
+|  POWER RULES:                                                             |
+|    x ** 0 = 1      1 ** x = 1                                             |
 |                                                                           |
-|  SELF-CANCELLATION:                                                      |
-|    x - x = 0       x / x = 1                                             |
+|  SELF-CANCELLATION:                                                       |
+|    x - x = 0       x / x = 1                                              |
 |                                                                           |
-|  CONSTANT FOLDING:                                                       |
-|    (2 + 3) = 5     (4 * 5) = 20    (10 / 2) = 5                          |
+|  CONSTANT FOLDING:                                                        |
+|    Addition:       (2 + 3) = 5                                            |
+|    Subtraction:    (5 - 3) = 2                                            |
+|    Multiplication: (4 * 5) = 20                                           |
+|    Division:       (10 / 2) = 5                                           |
+|    Power:          (2 ** 3) = 8                                           |
+|    Summative Add:  (3 ++ 4) = 16                                          |
+|    Summative Div:  (3 // 4) = 0.6                                         |
 |                                                                           |
 +===========================================================================+
 '''

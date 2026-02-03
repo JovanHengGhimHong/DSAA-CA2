@@ -276,6 +276,17 @@ class ExpressionOptimizerUI:
         print("Optimized Tree Structure:")
         print("-" * 50)
         optimized_tree.print_tree_inorder()
+        
+        # Ask if user wants to update the stored expression
+        if optimizations:
+            update = input("\nUpdate stored expression with optimized version? (Y/N): ").strip().upper()
+            if update == 'Y':
+                optimized_tokens = self.parser.tokenizer(optimized_expr)
+                dask_obj.expression = optimized_tokens
+                self.hash_table[var_name] = dask_obj
+                print(f"Expression for '{var_name}' has been updated!")
+            else:
+                print("Expression not updated.")
     
     def _optimize_all(self):
         print("\n" + "=" * 50)
@@ -317,6 +328,28 @@ class ExpressionOptimizerUI:
         print(f"  Total expressions: {len(variables)}")
         print(f"  Expressions optimized: {optimized_count}")
         print(f"  Total optimizations applied: {total_optimizations}")
+        
+        # Ask if user wants to update all stored expressions
+        if optimized_count > 0:
+            update = input(f"\nUpdate all {optimized_count} optimizable expression(s)? (Y/N): ").strip().upper()
+            if update == 'Y':
+                updated = 0
+                for var, dask_obj in variables:
+                    original_tokens = dask_obj.expression
+                    original_tree = self.parser.buildParseTree(original_tokens)
+                    optimized_tree = self.optimizer.optimize(original_tree)
+                    optimizations = self.optimizer.get_optimizations()
+                    
+                    if optimizations:
+                        optimized_expr = tree_to_expression(optimized_tree)
+                        optimized_tokens = self.parser.tokenizer(optimized_expr)
+                        dask_obj.expression = optimized_tokens
+                        self.hash_table[var] = dask_obj
+                        updated += 1
+                
+                print(f"{updated} expression(s) have been updated!")
+            else:
+                print("Expressions not updated.")
     
     def _optimize_custom(self):
         print("\n" + "=" * 50)

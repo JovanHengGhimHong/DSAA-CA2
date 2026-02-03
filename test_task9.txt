@@ -2,20 +2,6 @@ x=(10)
 y=(5)
 z=(2)
 
-sum=(x+y)
-diff=(x-y)
-prod=(x*y)
-
-levelone=(x+z)
-leveltwo=(levelone*y)
-levelthree=(leveltwo+sum)
-
-combo=((x+y)+(z*prod))
-
-multi=(x+y)
-uses=(multi*z)
-final=(uses+prod)
-
 addZero=(x+0)
 zeroAdd=(0+y)
 mulOne=(z*1)

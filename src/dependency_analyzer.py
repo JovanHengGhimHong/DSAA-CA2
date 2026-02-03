@@ -6,8 +6,10 @@ class DependencyAnalyzer:
     VISITING = 1
     VISITED = 2
     
-    def __init__(self, hash_table):
+    def __init__(self, hash_table=None, expressions=None):
+        """Initialize with either hash_table or expressions dict."""
         self._hash_table = hash_table
+        self._expressions = expressions  # dict of var -> expression string
         self._defined_variables = set()
         self._forward_graph = {}
         self._reverse_graph = {}
@@ -18,10 +20,22 @@ class DependencyAnalyzer:
     
     def _build_graphs(self):
         """Build both forward and reverse dependency graphs."""
-        # Build forward graph
-        for variable, dask_obj in self._hash_table.items():
-            if dask_obj is not None:
-                dependencies = self._extract_dependencies(dask_obj.expression)
+        # Build forward graph from hash_table or expressions dict
+        if self._hash_table is not None:
+            for variable, dask_obj in self._hash_table.items():
+                if dask_obj is not None:
+                    dependencies = self._extract_dependencies(dask_obj.expression)
+                    dependencies.discard(variable)
+                    
+                    self._defined_variables.add(variable)
+                    self._forward_graph[variable] = dependencies
+                    
+                    for dep in dependencies:
+                        if dep not in self._forward_graph:
+                            self._forward_graph[dep] = set()
+        elif self._expressions is not None:
+            for variable, expr_tokens in self._expressions.items():
+                dependencies = self._extract_dependencies(expr_tokens)
                 dependencies.discard(variable)
                 
                 self._defined_variables.add(variable)
@@ -165,9 +179,13 @@ class DependencyAnalyzer:
         return variable in self._forward_graph
     
     def get_expression_string(self, variable):
-        dask_obj = self._hash_table[variable]
-        if dask_obj:
-            return ''.join(dask_obj.expression)
+        if self._hash_table is not None:
+            dask_obj = self._hash_table[variable]
+            if dask_obj:
+                return ''.join(dask_obj.expression)
+        elif self._expressions is not None:
+            if variable in self._expressions:
+                return ''.join(self._expressions[variable])
         return "?"
 
 
@@ -179,11 +197,11 @@ class DependencyAnalyzerUI:
     |             DEPENDENCY ANALYZER - SUB MENU                   |
     +==============================================================+
     |  1. View all variable dependencies                           |
-    |  2. Detect circular references (cycles)                      |
-    |  3. Check for undefined variables                            |
-    |  4. Query: What does variable X depend on?                   |
-    |  5. Query: What depends on variable X? (reverse)             |
-    |  6. Full analysis report                                     |
+    |  2. Check for undefined variables                            |
+    |  3. Query: What does variable X depend on?                   |
+    |  4. Query: What depends on variable X? (reverse)             |
+    |  5. Full analysis report                                     |
+    |  6. Load & analyze from file (supports cycles)               |
     |  7. Return to main menu                                      |
     +==============================================================+
     """
@@ -203,20 +221,20 @@ class DependencyAnalyzerUI:
             if choice == '1':
                 self._show_all_dependencies()
             elif choice == '2':
-                self._show_cycle_detection()
-            elif choice == '3':
                 self._show_undefined_variables()
-            elif choice == '4':
+            elif choice == '3':
                 self._query_forward_dependencies()
-            elif choice == '5':
+            elif choice == '4':
                 self._query_reverse_dependencies()
-            elif choice == '6':
+            elif choice == '5':
                 self._show_full_report()
+            elif choice == '6':
+                self._load_and_analyze_file()
             elif choice == '7':
                 print("\n    Returning to main menu...\n")
                 break
             else:
-                print("\n    Invalid choice. Please enter 1-7.\n")
+                print("\n    Invalid choice. Please enter 1-9.\n")
             
             input("\n    Press Enter to continue...")
     
@@ -253,30 +271,6 @@ class DependencyAnalyzerUI:
             else:
                 print(f"    {var} = {exp_str}")
                 print(f"        --> (independent - no dependencies)")
-    
-    def _show_cycle_detection(self):
-        self._print_section("CIRCULAR DEPENDENCY DETECTION")
-        
-        vars_in_cycles, cycles = self._analyzer.detect_cycles()
-        
-        if not cycles:
-            print("    [OK] No circular dependencies detected!")
-            print("    All expressions can be evaluated in topological order.")
-            return
-        
-        print(f"    [WARNING] Found {len(cycles)} cycle(s)!\n")
-        
-        print("    Variables involved in cycles:")
-        for var in sorted(vars_in_cycles, key=str.lower):
-            exp_str = self._analyzer.get_expression_string(var)
-            print(f"        - {var} = {exp_str}")
-        
-        print("\n    Cycle paths detected:")
-        for i, cycle in enumerate(cycles, 1):
-            cycle_str = " -> ".join(cycle)
-            print(f"        {i}. {cycle_str}")
-        
-        print(f"\n    Impact: {len(vars_in_cycles)} variable(s) cannot be evaluated")
     
     def _show_undefined_variables(self):
         self._print_section("UNDEFINED VARIABLE CHECK")
@@ -449,13 +443,107 @@ class DependencyAnalyzerUI:
         
         if most_dependents and max_dependents > 0:
             print(f"    Most impact ({max_dependents} affected):     {', '.join(sorted(most_dependents, key=str.lower))}")
+    
+    def _load_and_analyze_file(self):
+        """Load expressions from file and analyze (supports cycles)."""
+        self._print_section("LOAD & ANALYZE FROM FILE")
+        
+        print("    This loads expressions directly for analysis without")
+        print("    adding them to the main program (supports cycles).\n")
+        
+        filepath = input("    Enter file path: ").strip()
+        
+        if not filepath:
+            print("    No file path entered.")
+            return
+        
+        try:
+            with open(filepath, 'r') as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            print(f"    File not found: {filepath}")
+            return
+        except Exception as e:
+            print(f"    Error reading file: {e}")
+            return
+        
+        # Parse expressions from file
+        expressions = {}
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            
+            key, exp = line.split('=', 1)
+            key = key.strip()
+            # Simple tokenizer for dependencies
+            tokens = []
+            current = ''
+            for char in exp:
+                if char.isalpha():
+                    current += char
+                else:
+                    if current:
+                        tokens.append(current)
+                        current = ''
+            if current:
+                tokens.append(current)
+            expressions[key] = tokens
+        
+        if not expressions:
+            print("    No valid expressions found in file.")
+            return
+        
+        # Create analyzer for file expressions
+        file_analyzer = DependencyAnalyzer(expressions=expressions)
+        
+        print(f"\n    Loaded {len(expressions)} expressions from file.")
+        print(f"    Dependency edges: {file_analyzer.get_total_edges()}")
+        
+        # Check for cycles
+        vars_in_cycles, cycles = file_analyzer.detect_cycles()
+        
+        print(f"\n    CYCLE DETECTION RESULTS")
+        print(f"    {'.' * 50}")
+        
+        if cycles:
+            print(f"    [WARNING] Found {len(cycles)} cycle(s)!")
+            print(f"    Variables in cycles: {len(vars_in_cycles)}")
+            
+            print("\n    Cycle paths:")
+            for i, cycle in enumerate(cycles, 1):
+                cycle_str = " -> ".join(cycle)
+                print(f"        {i}. {cycle_str}")
+            
+            print(f"\n    Variables involved:")
+            for var in sorted(vars_in_cycles, key=str.lower):
+                exp_str = file_analyzer.get_expression_string(var)
+                print(f"        - {var} = {exp_str}")
+        else:
+            print("    [OK] No circular dependencies detected!")
+        
+        # Check for undefined
+        undefined = file_analyzer.get_undefined_variables()
+        if undefined:
+            print(f"\n    UNDEFINED VARIABLES")
+            print(f"    {'.' * 50}")
+            print(f"    Found {len(undefined)}: {', '.join(sorted(undefined, key=str.lower))}")
+        
+        # Show all dependencies
+        print(f"\n    ALL DEPENDENCIES")
+        print(f"    {'.' * 50}")
+        for var in sorted(file_analyzer.get_defined_variables(), key=str.lower):
+            deps = file_analyzer.get_dependencies(var)
+            exp_str = file_analyzer.get_expression_string(var)
+            if deps:
+                print(f"    {var} = {exp_str}")
+                print(f"        --> depends on: {', '.join(sorted(deps, key=str.lower))}")
+            else:
+                print(f"    {var} = {exp_str}")
+                print(f"        --> (independent)")
 
 
 def run_dependency_analyzer(hash_table):
     """Main entry point for the dependency analyzer feature."""
-    if len(list(hash_table.items())) == 0:
-        print("\n    No DASK expressions loaded. Please add expressions first.\n")
-        return
-    
     ui = DependencyAnalyzerUI(hash_table)
     ui.run()

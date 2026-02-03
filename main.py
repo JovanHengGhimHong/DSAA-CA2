@@ -30,8 +30,8 @@ menu_msg = '''
     5. Sort DASK expressions
     6. DASK Report - Jovan
     7. Temp DASK Variable Visualizer - Jovan
-    8. Dependency Analyzer & Cycle Detection
-    9. Expression Optimizer / Simplifier
+    8. Dependency Analyzer & Cycle Detection - Joen
+    9. Expression Optimizer / Simplifier - Joen
     10. Exit
 '''
 print(start_msg)

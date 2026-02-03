@@ -11,7 +11,9 @@ from src.dependency_analyzer import run_dependency_analyzer
 from src.expression_optimizer import run_expression_optimizer
 
 
-start_msg = '''
+class Application:
+  def __init__(self):
+    self.start_msg = '''
 *******************************************************************************
 *                                                                             *
 *                   ST1507 DSAA: DASK Expression Evaluator!                   *
@@ -21,7 +23,7 @@ start_msg = '''
 *                                                                             *
 *******************************************************************************
 '''
-menu_msg = '''
+    self.menu_msg = '''
   Please select your choice ('1' - '10'):
     1. Add/Modify DASK Expressions
     2. Display current DASK expressions
@@ -34,250 +36,245 @@ menu_msg = '''
     9. Expression Optimizer / Simplifier - Joen
     10. Exit
 '''
-print(start_msg)
-print(menu_msg)
+    print(self.start_msg)
+    print(self.menu_msg)
 
-# We always create a parse tree object and hash table to store variables
-parser = DASK_ParseTree()
-hash_table = HashTable(100)
-topological_graph = nx.DiGraph()
+    # We always create a parse tree object and hash table to store variables
+    self.parser = DASK_ParseTree()
+    self.hash_table = HashTable(100)
+    self.topological_graph = nx.DiGraph()
 
-def add_dask_expresssion(key, exp):
-    tokens = parser.tokenizer(exp)
+  def add_dask_expresssion(self, key, exp):
+      tokens = self.parser.tokenizer(exp)
 
-    # Parse tree build and evaluate
-    hash_table[key] = Dask(expression=tokens, value=None)
+      # Parse tree build and evaluate
+      self.hash_table[key] = Dask(expression=tokens, value=None)
 
-    # Adding to topological graph
-    # key relies on t
-    added_edges = [topological_graph.add_edge(t, key) for t in tokens if t.isalpha()]
+      # Adding to topological graph
+      # key relies on t
+      added_edges = [self.topological_graph.add_edge(t, key) for t in tokens if t.isalpha()]  
+      # independent
+      if len(added_edges) == 0:
+        dask_obj = self.hash_table[key]
+        dask_obj.independent = True
 
-    # independent
-    if len(added_edges) == 0:
-      dask_obj = hash_table[key]
-      dask_obj.independent = True
+        # this becomes an expression that we can immediately evaluate
+        tree = self.parser.buildParseTree(dask_obj.expression)
+        value = self.parser.evaluate(tree, self.hash_table)
+        dask_obj.value = value
 
-      # this becomes an expression that we can immediately evaluate
-      tree = parser.buildParseTree(dask_obj.expression)
-      value = parser.evaluate(tree, hash_table)
-      dask_obj.value = value
+        # update
+        self.hash_table[key] = dask_obj
+      return
 
-      # update
-      hash_table[key] = dask_obj
-    return
+  def show_dask_expressions(self, sorting_key=lambda x: x.lower(), output=True):
+      # since we want to output sorted alphabetically we can use a sorted map
+      sorted_map = SortedMap(sorting_function=sorting_key)
 
-def show_dask_expressions(hash_table, topological_graph, sorting_key=lambda x: x.lower(), output=True):
-    # since we want to output sorted alphabetically we can use a sorted map
-    sorted_map = SortedMap(sorting_function=sorting_key)
+      if output:
+        print('CURRENT EXPRESSION:')
+        print('***************************************')
 
-    if output:
-      print('CURRENT EXPRESSION:')
-      print('***************************************')
+      # print the independent ones first
+      for var, dask_obj in self.hash_table.items():
+        if dask_obj.independent:
+          sorted_map[var] = dask_obj
 
-    # print the independent ones first
-    for var, dask_obj in hash_table.items():
-      if dask_obj.independent:
+      # iteratively calcuate
+      sorted_graph = list(nx.topological_sort(self.topological_graph))
+      for var in sorted_graph:
+        dask_obj = self.hash_table[var]
+        if dask_obj == None:
+          # skip the ones that dont exist
+          continue
+
+        if dask_obj.independent:
+          # skip independent ones
+          continue
+
+        # calcuate value
+        tree = self.parser.buildParseTree(dask_obj.expression)
+        value = self.parser.evaluate(tree, self.hash_table)
+
+        # Update the dask thingy
+        dask_obj.value = value
+        self.hash_table[var] = dask_obj
+
+        # add to sorted map
         sorted_map[var] = dask_obj
 
-    # iteratively calcuate
-    sorted_graph = list(nx.topological_sort(topological_graph))
-    for var in sorted_graph:
-      dask_obj = hash_table[var]
-      if dask_obj == None:
-        # skip the ones that dont exist
-        continue
+      # output all
+      if output:
+        for var, dask_obj in sorted_map.items():
+          print(f'{var}={dask_obj}')
+      return sorted_map
 
-      if dask_obj.independent:
-        # skip independent ones
-        continue
-
-      # calcuate value
-      tree = parser.buildParseTree(dask_obj.expression)
-      value = parser.evaluate(tree, hash_table)
-
-      # Update the dask thingy
-      dask_obj.value = value
-      hash_table[var] = dask_obj
-
-      # add to sorted map
-      sorted_map[var] = dask_obj
-
-    # output all
-    if output:
-      for var, dask_obj in sorted_map.items():
-        print(f'{var}={dask_obj}')
-    return sorted_map
-
-#################################
-# Main Loop
-#################################
-choice = input("Enter choice: ")
-while choice != '10':
-  # Expression Storing/Modify
-  if choice == '1':
-    print("Enter the DASK expression you want to add/modify:")
-    print("For example: a=(1+2)\n")
-    key, exp = dask_input("Enter DASK expression: ")
-    add_dask_expresssion(key, exp)
-
-  # evaluuation
-  elif choice == '2':
-    show_dask_expressions(hash_table, topological_graph)
-
-  # evaluate single expression from hash
-  elif choice == '3':
-    print("Enter the variable you want to evaluate:")
-    var = input().strip()
-    dask_obj = hash_table[var]
-
-    # validate proper variable
-    while dask_obj == None:
-      print(f'Variable {var} does not exist!')
-      print('Please enter another variable: \n')
-      var = input().strip()
-      dask_obj = hash_table[var]
-
-    tree = parser.buildParseTree(dask_obj.expression)
-    value = parser.evaluate(tree, hash_table)
-
-    print('\nExpression Tree (Inorder):')
-    tree.print_tree_inorder()
-    print(f'Value of variable "{var}" is {value}')
-
-  # read from file and add dask to table
-  elif choice == '4':
-    filename = input_file_path("Please enter input file: ")
-
-    with open(filename, 'r') as f:
-      lines = f.readlines()
-
-      for line in lines:
-        line = line.strip()
-        
-        # skip blank lines and comments
-        if not line or line.startswith('#'):
-          continue
-        
-        # skip lines without = sign
-        if '=' not in line:
-          continue
-          
-        key , exp = line.split('=', 1)
-
-        # skip invalid expressions
-        if not parser.verify_expression(exp):
-          print(f'Invalid DASK for {key} = {exp}. Skipping...')
-          continue
-
-        add_dask_expresssion(key, exp)
-
-    f.close()
-    
-    # print current expressions
-    show_dask_expressions(hash_table, topological_graph)
-
-  # sort expressions based on result values
-  elif choice == '5':
-    filename = input("Please enter output file: ")
-    sorted_map = show_dask_expressions(hash_table, topological_graph, sorting_key=lambda x: -hash_table[x].value if hash_table[x].value != None else float('inf'), output=False)
-    with open(filename, 'w') as f:
-      prev = float('-inf')
-      for var, dask_obj in sorted_map.items():
-        if dask_obj.value != prev:
-          f.write(f'\n*** Expressions with value => {dask_obj.value}\n')
-          prev = dask_obj.value
-
-        exp_str = ''.join(dask_obj.expression)
-        f.write(f'{var}={exp_str}\n')
-    f.close()
-
-    print('>>>Sorting of DASK expressions completed!')
-
-  # Jovan - DASK Report
-  elif choice == '6':
-    output_path = input("Please enter output HTML file path: ")
-
-    while output_path.strip() == '' or not output_path.lower().endswith('.html'):
-      print('That is not a valid HTMl path. Please try again!\n')
-      output_path = input("Please enter output HTML file path: ")
-            
-    # get data
-    data = get_dask_data(topological_graph, show_dask_expressions(hash_table, topological_graph, output=False), parser.buildParseTree)
-
-    # build html
-    build_html(data, output_path)
-
-    print(f'DASK Report generated successfully at {output_path}!')
-
-    # query open
-    open_query = yes_no_input('Do you want to open the report now? (y/n): ')
-
-    if open_query.lower() == 'y':
-      os.startfile(output_path)
-
-  # Jovan - Temp DASK Variable Visualizer
-  elif choice == '7':
-    clear()
-    show_dask_expressions(hash_table, topological_graph)
-    print('\nPlease enter expressions to visualize DASK Variables (q to quit):')
-    expression = 0
-    pending_keys = []
-
-    while expression != 'q':
-      key , expression = dask_input("Enter DASK expression: ", allow_quit=True)
       
-      # add dask 'temp'
-      pending_keys.append(key)
-      add_dask_expresssion(key, expression)
+  def run(self):
+    #################################
+    # Main Loop Recursive
+    #################################
+    choice = input("Enter choice: ")
+
+    if choice == '10':
+      return
+    # Expression Storing/Modify
+    if choice == '1':
+      print("Enter the DASK expression you want to add/modify:")
+      print("For example: a=(1+2)\n")
+      key, exp = dask_input("Enter DASK expression: ")
+      self.add_dask_expresssion(key, exp)
+
+    # evaluuation
+    elif choice == '2':
+      self.show_dask_expressions()
+    # evaluate single expression from hash
+    elif choice == '3':
+      print("Enter the variable you want to evaluate:")
+      var = input().strip()
+      dask_obj = self.hash_table[var]
+      # validate proper variable
+      while dask_obj == None:
+        print(f'Variable {var} does not exist!')
+        print('Please enter another variable: \n')
+        var = input().strip()
+        dask_obj = self.hash_table[var]
+
+      tree = self.parser.buildParseTree(dask_obj.expression)
+      value = self.parser.evaluate(tree, self.hash_table)
+
+      print('\nExpression Tree (Inorder):')
+      tree.print_tree_inorder()
+      print(f'Value of variable "{var}" is {value}')
+
+    # read from file and add dask to table
+    elif choice == '4':
+      filename = input_file_path("Please enter input file: ")
+
+      with open(filename, 'r') as f:
+        lines = f.readlines()
+
+        for line in lines:
+          key , exp = line.strip().split('=', 1)
+
+          # skip invalid expressions
+          if not self.parser.verify_expression(exp):
+            print(f'Invalid DASK for {key} = {exp}. Skipping...')
+            continue
+
+          self.add_dask_expresssion(key, exp)
+      f.close()
+      
+      # print current expressions
+      self.show_dask_expressions()
+
+    # sort expressions based on result values
+    elif choice == '5':
+      filename = input("Please enter output file: ")
+      sorted_map = self.show_dask_expressions(sorting_key=lambda x: -self.hash_table[x].value if self.hash_table[x].value != None else float('inf'), output=False)
+      with open(filename, 'w') as f:
+        prev = float('-inf')
+        for var, dask_obj in sorted_map.items():
+          if dask_obj.value != prev:
+            f.write(f'\n*** Expressions with value => {dask_obj.value}\n')
+            prev = dask_obj.value
+
+          exp_str = ''.join(dask_obj.expression)
+          f.write(f'{var}={exp_str}\n')
+      f.close()
+
+      print('>>>Sorting of DASK expressions completed!')
+
+    # Jovan - DASK Report
+    elif choice == '6':
+      output_path = input("Please enter output HTML file path: ")
+
+      while output_path.strip() == '' or not output_path.lower().endswith('.html'):
+        print('That is not a valid HTMl path. Please try again!\n')
+        output_path = input("Please enter output HTML file path: ")
+              
+      # get data
+      data = get_dask_data(self.topological_graph, self.show_dask_expressions(output=False), self.parser.buildParseTree)
+
+      # build html
+      build_html(data, output_path)
+
+      print(f'DASK Report generated successfully at {output_path}!')
+
+      # query open
+      open_query = yes_no_input('Do you want to open the report now? (y/n): ')
+
+      if open_query.lower() == 'y':
+        os.startfile(output_path)
+
+    # Jovan - Temp DASK Variable Visualizer
+    elif choice == '7':
+      clear()
+      self.show_dask_expressions()
+      print('\nPlease enter expressions to visualize DASK Variables (q to quit):')
+      expression = 0
+      pending_keys = []
+
+      while expression != 'q':
+        key , expression = dask_input("Enter DASK expression: ", allow_quit=True)
+        
+        # add dask 'temp'
+        pending_keys.append(key)
+        self.add_dask_expresssion(key, expression)
+        clear()
+
+
+        # custom print
+        sorted_map = self.show_dask_expressions(output=False)
+        for var, dask_obj in sorted_map.items():
+          if var in pending_keys:
+            print(f'***{var}={dask_obj}***')
+          else:
+            print(f'{var}={dask_obj}')
+
+        # reprompt
+        print('\nPlease enter expressions to visualize DASK Variables (q to quit):')
+        key, expression = dask_input("Enter DASK expression: ", allow_quit=True)
+
+      # show 'pending' expressions to add
+      if len(pending_keys) > 0:
+        print('\nThe following expressions were not added:')
+        print('***********************************************')
+        for pk in pending_keys:
+          dask_obj = self.hash_table[pk]
+          print(f'{pk}={dask_obj}')
+
+        add_expressions = yes_no_input('Do you want to add these expressions? (y/n): ')
+
+        if add_expressions.lower() == 'n':
+          # remove since theyre alr stored
+          for pk in pending_keys:
+            del self.hash_table[pk]
+
+            # handle graph edges 
+            if pk in self.topological_graph:
+              self.topological_graph.remove_node(pk)
       clear()
 
+    # Dependency Analyzer & Cycle Detection (unified feature)
+    elif choice == '8':
+      run_dependency_analyzer(self.hash_table)
 
-      # custom print
-      sorted_map = show_dask_expressions(hash_table, topological_graph, output=False)
-      for var, dask_obj in sorted_map.items():
-        if var in pending_keys:
-          print(f'***{var}={dask_obj}***')
-        else:
-          print(f'{var}={dask_obj}')
+    # Expression Optimizer / Simplifier
+    elif choice == '9':
+      run_expression_optimizer(self.hash_table, self.parser)
+      
+    # invalid
+    else:
+      print('That is not a valid choice. Please try again.')
 
-      # reprompt
-      print('\nPlease enter expressions to visualize DASK Variables (q to quit):')
-      key, expression = dask_input("Enter DASK expression: ", allow_quit=True)
-
-    # show 'pending' expressions to add
-    if len(pending_keys) > 0:
-      print('\nThe following expressions were not added:')
-      print('***********************************************')
-      for pk in pending_keys:
-        dask_obj = hash_table[pk]
-        print(f'{pk}={dask_obj}')
-
-      add_expressions = yes_no_input('Do you want to add these expressions? (y/n): ')
-
-      if add_expressions.lower() == 'n':
-        # remove since theyre alr stored
-        for pk in pending_keys:
-          del hash_table[pk]
-
-          # handle graph edges 
-          if pk in topological_graph:
-            topological_graph.remove_node(pk)
-
-    clear()
-
-  # Dependency Analyzer & Cycle Detection (unified feature)
-  elif choice == '8':
-    run_dependency_analyzer(hash_table)
-  
-  # Expression Optimizer / Simplifier
-  elif choice == '9':
-    run_expression_optimizer(hash_table, parser)
+    # re-input
+    input('Press enter key, to continue... ')
+    print(self.menu_msg)
+    self.run()
     
-  # invalid
-  else:
-    print('That is not a valid choice. Please try again.')
+# psvm
 
-  # re-input
-  input('Press enter key, to continue... ')
-  print(menu_msg)
-  choice = input("Enter choice: ")
+if __name__ == '__main__':
+  app = Application()
+  app.run()
